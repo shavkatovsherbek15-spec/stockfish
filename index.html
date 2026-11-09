@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shaxmat raqibi — Stockfish</title>
+<style>
+  :root{
+    --bg:#16181d; --panel:#1f232b; --line:#2c313b; --text:#e9ecf1; --muted:#9aa3b2;
+    --light:#ecd9b9; --dark:#ae8a68; --sel:#f6e05e; --last:rgba(246,224,94,.45);
+    --accent:#4fb37a; --danger:#e05d5d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px;display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
+  .left{flex:0 1 560px;min-width:280px}
+  .right{flex:1 1 300px;min-width:280px;display:flex;flex-direction:column;gap:12px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+
+  .board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));
+    border-radius:6px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.45);
+    container-type:inline-size;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+  .sq{position:relative;min-width:0;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;border:0;padding:0;margin:0}
+  .sq.l{background:var(--light)} .sq.d{background:var(--dark)}
+  .sq.last::before{content:"";position:absolute;inset:0;background:var(--last)}
+  .sq.sel::before{content:"";position:absolute;inset:0;background:rgba(246,224,94,.7)}
+  .sq.check::before{content:"";position:absolute;inset:0;
+    background:radial-gradient(circle,rgba(230,40,40,.95) 0%,rgba(230,40,40,.5) 45%,transparent 75%)}
+  .sq.target::after{content:"";position:absolute;width:30%;height:30%;border-radius:50%;background:rgba(0,0,0,.25)}
+  .sq.target.cap::after{width:88%;height:88%;background:transparent;border:5px solid rgba(0,0,0,.28)}
+  .pc{position:relative;z-index:1;font-size:10.4cqw;line-height:1;pointer-events:none;
+    font-family:"Segoe UI Symbol","DejaVu Sans","Noto Sans Symbols2","Arial Unicode MS",sans-serif}
+  .pc.w{color:#fff;text-shadow:0 0 1px #000,0 0 1px #000,0 0 2px #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000}
+  .pc.b{color:#111;text-shadow:0 0 1px #fff3}
+  .coord{position:absolute;font-size:2.2cqw;font-weight:700;opacity:.75;pointer-events:none;z-index:2}
+  .coord.f{right:3px;bottom:1px} .coord.r{left:3px;top:1px}
+  .sq.l .coord{color:var(--dark)} .sq.d .coord{color:var(--light)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .status{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;min-height:24px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none}
+  .dot.think{background:var(--sel);animation:pulse 1s infinite}
+  .dot.over{background:var(--danger)}
+  @keyframes pulse{50%{opacity:.25}}
+  .reply{margin-top:10px;padding:12px;border-radius:8px;background:#11141a;border:1px solid var(--line)}
+  .reply .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .reply .big{font-size:26px;font-weight:800;margin-top:4px}
+  .reply .small{font-size:14px;color:var(--muted);margin-top:2px}
+
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button.b{background:#2a303b;color:var(--text);border:1px solid #394150;border-radius:8px;
+    padding:9px 12px;font-size:14px;cursor:pointer;font-weight:600}
+  button.b:hover{background:#333a47}
+  button.b.primary{background:var(--accent);border-color:var(--accent);color:#0c1a12}
+  button.b.on{outline:2px solid var(--accent)}
+  select{background:#2a303b;color:var(--text);border:1px solid #394150;border-radius:8px;padding:8px;font-size:14px}
+  label{font-size:13px;color:var(--muted)}
+
+  .moves{max-height:240px;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;
+    display:grid;grid-template-columns:36px 1fr 1fr;gap:2px 8px}
+  .moves .n{color:var(--muted)} .moves .m.lastm{color:var(--sel);font-weight:700}
+  .empty{color:var(--muted);font-size:13px}
+
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:10}
+  .modal.show{display:flex}
+  .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center}
+  .promo{display:flex;gap:8px;margin-top:10px}
+  .promo button{width:64px;height:64px;font-size:44px;border-radius:8px;border:1px solid #394150;background:var(--light);cursor:pointer}
+  .loading{color:var(--muted);font-size:13px}
+  .sq.hint::before{content:"";position:absolute;inset:0;background:rgba(79,179,122,.55)}
+  .arrow{position:absolute;inset:0;pointer-events:none;z-index:3}
+  .boardwrap{position:relative}
+  .modes{display:flex;gap:6px;margin-bottom:12px}
+  .modes button{flex:1}
+  .help{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.45}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="left">
+    <h1>♞ Shaxmat raqibi</h1>
+    <p class="sub" id="sub"></p>
+    <div class="boardwrap"><div id="board" class="board"></div><svg id="arrow" class="arrow" viewBox="0 0 8 8"></svg></div>
+  </div>
+
+  <div class="right">
+    <div class="card">
+      <div class="modes">
+        <button class="b" id="mHelp">🧠 Maslahatchi</button>
+        <button class="b" id="mPlay">🤖 Stockfishga qarshi</button>
+      </div>
+      <div class="status"><span id="dot" class="dot think"></span><span id="status">Dvigatel yuklanmoqda (birinchi marta ~10 MB, biroz kuting)…</span></div>
+      <div class="reply">
+        <div class="lbl" id="replyLbl">—</div>
+        <div class="big" id="replyBig">—</div>
+        <div class="small" id="replySmall"></div>
+        <div class="row" style="margin-top:10px" id="doHintRow" hidden>
+          <button class="b primary" id="doHint">✓ Shu yurishni qildim</button>
+        </div>
+      </div>
+      <div class="help" id="helpText"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <label>Men o'ynayman:</label>
+        <button class="b on" id="cWhite">♔ Oq</button>
+        <button class="b" id="cBlack">♚ Qora</button>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <label for="think">Stockfish o'ylash vaqti:</label>
+        <select id="think">
+          <option value="1000">1 soniya</option>
+          <option value="3000" selected>3 soniya</option>
+          <option value="5000">5 soniya</option>
+          <option value="10000">10 soniya</option>
+        </select>
+      </div>
+      <div class="row">
+        <button class="b primary" id="newGame">Yangi o'yin</button>
+        <button class="b" id="undo">↶ Orqaga qaytarish</button>
+        <button class="b" id="flip">⇅ Doskani aylantirish</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Yurishlar</div>
+      <div id="moves" class="moves"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="promoModal">
+  <div class="box">
+    <div>Piyoda qaysi donaga aylansin?</div>
+    <div class="promo" id="promoBtns"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.js"></script>
+<script id="sfScript" src="https://unpkg.com/stockfish@18.0.5/bin/stockfish-18-asm.js"></script>
+<script>
+(function(){
+  const game = new Chess();
+  const $ = id => document.getElementById(id);
+  const boardEl = $('board'), arrowEl = $('arrow');
+  const thinkSel = $('think');
+
+  // mode: 'help' = maslahatchi (ikkala tomonni sen kiritasan, Stockfish senga maslahat beradi)
+  //       'play' = Stockfishga qarshi o'yin (Stockfish o'zi yuradi)
+  let mode = 'help';
+  let playerColor = 'w';
+  let orientation = 'w';
+  let selected = null;
+  let engineReady = false;
+  let searching = false;
+  let pendingPromo = null;
+  let hint = null;          // {from,to,promotion,fen}
+  let lastOppMove = null;   // play rejimida Stockfish yurishi
+
+  const GLYPH = {k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+  const NAME = {k:'Shoh',q:'Farzin',r:'Ruh',b:'Fil',n:'Ot',p:'Piyoda'};
+  const FILES = 'abcdefgh';
+
+  // ---------- Engine (sahifaning o'zida, asinxron) ----------
+  let sf = null;
+  let ignoreCount = 0;
+  let wantSearch = false;
+  let searchFen = null;
+  function send(cmd){ sf.ccall('command', null, ['string'], [cmd]); }
+  function onEngineLine(line){
+    if (typeof line !== 'string' || line.indexOf('bestmove') !== 0) return;
+    searching = false;
+    const uci = line.split(' ')[1];
+    if (ignoreCount > 0) { ignoreCount--; if (wantSearch) requestEngine(); return; }
+    const fen = searchFen;
+    setTimeout(function(){ onBestMove(uci, fen); }, 0);
+  }
+  function initEngine(){
+    const tag = $('sfScript');
+    const factory = tag && tag._exports;
+    if (typeof factory !== 'function') {
+      setStatus('Dvigatelni yuklab bo\'lmadi. Internetni tekshirib, sahifani yangilang.', 'over');
+      return;
+    }
+    factory({listener: onEngineLine}).then(function(mod){
+      sf = mod;
+      (function waitReady(){
+        if (sf._isReady && !sf._isReady()) return setTimeout(waitReady, 20);
+        send('uci');
+        send('setoption name Skill Level value 20');
+        send('setoption name Hash value 32');
+        send('isready');
+        engineReady = true;
+        afterChange();
+      })();
+    }).catch(function(e){ setStatus('Dvigatelda xato: ' + (e && e.message || e), 'over'); });
+  }
+
+  function engineShouldThink(){
+    if (!engineReady || game.game_over()) return false;
+    return mode === 'play' ? game.turn() !== playerColor : game.turn() === playerColor;
+  }
+  function requestEngine(){
+    if (!engineShouldThink()) return;
+    if (hint && hint.fen === game.fen()) return;  // maslahat allaqachon tayyor
+    if (searching) { wantSearch = true; return; }
+    wantSearch = false;
+    searching = true;
+    searchFen = game.fen();
+    send('position fen ' + searchFen);
+    send('go movetime ' + thinkSel.value);
+  }
+  function cancelSearch(){
+    wantSearch = false;
+    if (searching) { ignoreCount++; send('stop'); }
+  }
+  function onBestMove(uci, fen){
+    if (fen !== game.fen()) { afterChange(); return; }  // pozitsiya o'zgarib ketgan
+    if (!uci || uci === '(none)') { afterChange(); return; }
+    const m = {from:uci.slice(0,2), to:uci.slice(2,4), promotion: uci[4] || undefined};
+    if (mode === 'play') {
+      const mv = game.move({from:m.from, to:m.to, promotion:m.promotion || 'q'});
+      if (mv) lastOppMove = mv;
+    } else {
+      hint = Object.assign(m, {fen: fen});
+    }
+    afterChange();
+  }
+
+  // ---------- Matn ----------
+  function describe(mv){
+    if (mv.flags.indexOf('k') >= 0) return {big:'O-O', small:'Qisqa rokirovka (shoh '+mv.from+' → '+mv.to+')'};
+    if (mv.flags.indexOf('q') >= 0) return {big:'O-O-O', small:'Uzun rokirovka (shoh '+mv.from+' → '+mv.to+')'};
+    let s = NAME[mv.piece] + ' ' + mv.from + ' → ' + mv.to;
+    if (mv.captured) s += ', ' + NAME[mv.captured].toLowerCase() + 'ni oladi';
+    if (mv.flags.indexOf('e') >= 0) s += ' (o\'tib ketayotganda olish)';
+    if (mv.promotion) s += ', ' + NAME[mv.promotion].toLowerCase() + 'ga aylanadi';
+    return {big: GLYPH[mv.piece] + ' ' + mv.from + ' → ' + mv.to, small: s + '  ·  ' + mv.san};
+  }
+  function hintMove(){
+    if (!hint || hint.fen !== game.fen()) return null;
+    const c = new Chess(hint.fen);
+    return c.move({from:hint.from, to:hint.to, promotion:hint.promotion || 'q'});
+  }
+
+  function setStatus(text, kind){
+    $('status').textContent = text;
+    $('dot').className = 'dot' + (kind ? ' ' + kind : '');
+  }
+  function gameOverText(){
+    if (game.in_checkmate()) {
+      return game.turn() === playerColor ? 'Mat! Raqib yutdi.' : 'Mat! Sen yutding! 🎉';
+    }
+    if (game.in_stalemate()) return 'Pat — durang.';
+    if (game.in_threefold_repetition()) return 'Uch marta takrorlandi — durang.';
+    if (game.insufficient_material()) return 'Mat qilishga dona yetmaydi — durang.';
+    if (game.in_draw()) return 'Durang (50 yurish qoidasi).';
+    return null;
+  }
+
+  function updatePanel(){
+    $('mHelp').classList.toggle('on', mode==='help');
+    $('mPlay').classList.toggle('on', mode==='play');
+    $('doHintRow').hidden = true;
+
+    if (mode === 'help') {
+      $('sub').textContent = 'Haqiqiy raqib bilan o\'ynaysan: ikkala tomonning yurishini shu doskaga kiritasan, Stockfish senga eng kuchli yurishni aytadi.';
+      $('helpText').innerHTML = '1) Rangingni tanla. 2) Navbat senda bo\'lsa — Stockfish maslahatini (yashil o\'q) o\'z doskangda yur va shu yerda ham yur (yoki "Shu yurishni qildim" tugmasini bos). 3) Raqib yurgach — uning yurishini shu doskada ham qil. Stockfish yana maslahat beradi.';
+    } else {
+      $('sub').textContent = 'Sen Stockfishga qarshi o\'ynaysan: sen yurasan, u javob beradi.';
+      $('helpText').textContent = 'Stockfish yurishi shu yerda yoziladi va doskada sariq bilan belgilanadi.';
+    }
+
+    if (!engineReady) { setStatus('Dvigatel yuklanmoqda (birinchi marta ~10 MB, biroz kuting)…', 'think'); }
+    const over = gameOverText();
+
+    if (mode === 'help') {
+      $('replyLbl').textContent = 'Sening eng kuchli yurishing';
+      const hm = hintMove();
+      if (over) {
+        setStatus(over, 'over'); $('replyBig').textContent = '—'; $('replySmall').textContent = '';
+      } else if (!engineReady) {
+        $('replyBig').textContent = '—'; $('replySmall').textContent = '';
+      } else if (game.turn() === playerColor) {
+        if (hm) {
+          const d = describe(hm);
+          setStatus(game.in_check() ? 'Senga shax! Maslahat tayyor.' : 'Maslahat tayyor — shuni yur.', '');
+          $('replyBig').textContent = d.big; $('replySmall').textContent = d.small;
+          $('doHintRow').hidden = false;
+        } else {
+          setStatus('Stockfish o\'ylayapti…', 'think');
+          $('replyBig').textContent = '…'; $('replySmall').textContent = '';
+        }
+      } else {
+        setStatus('Raqib nima yurdi? Uning yurishini doskada kirit.', '');
+        $('replyBig').textContent = '—';
+        $('replySmall').textContent = 'Raqib yurgach, keyingi maslahat shu yerda chiqadi.';
+      }
+    } else {
+      $('replyLbl').textContent = 'Stockfish yurishi';
+      if (lastOppMove) { const d = describe(lastOppMove); $('replyBig').textContent = d.big; $('replySmall').textContent = d.small; }
+      else { $('replyBig').textContent = '—'; $('replySmall').textContent = 'Stockfish yurgach, shu yerda ko\'rinadi.'; }
+      if (over) setStatus(over, 'over');
+      else if (!engineReady) {}
+      else if (game.turn() === playerColor) setStatus(game.in_check() ? 'Shoh! Senga shax — himoyalan.' : 'Sening navbating — yur.', '');
+      else setStatus('Stockfish o\'ylayapti…', 'think');
+    }
+  }
+
+  // ---------- Doska ----------
+  function render(){
+    const hist = game.history({verbose:true});
+    const last = hist[hist.length-1];
+    const hm = mode === 'help' ? hintMove() : null;
+    let targets = {};
+    if (selected) game.moves({square:selected, verbose:true}).forEach(m => { targets[m.to] = !!m.captured || m.flags.indexOf('e')>=0; });
+    let checkSq = null;
+    if (game.in_check()) {
+      const b = game.board();
+      for (let r=0;r<8;r++) for (let f=0;f<8;f++){ const p=b[r][f]; if (p && p.type==='k' && p.color===game.turn()) checkSq = FILES[f]+(8-r); }
+    }
+    boardEl.innerHTML = '';
+    for (let i=0;i<8;i++) for (let j=0;j<8;j++){
+      const rank = orientation==='w' ? 8-i : i+1;
+      const file = orientation==='w' ? j : 7-j;
+      const sq = FILES[file] + rank;
+      const el = document.createElement('div');
+      el.className = 'sq ' + ((file + rank) % 2 === 1 ? 'l' : 'd');
+      if (last && (sq===last.from || sq===last.to)) el.classList.add('last');
+      if (hm && (sq===hm.from || sq===hm.to)) el.classList.add('hint');
+      if (sq===selected) el.classList.add('sel');
+      if (sq===checkSq) el.classList.add('check');
+      if (sq in targets) { el.classList.add('target'); if (targets[sq]) el.classList.add('cap'); }
+      const p = game.get(sq);
+      if (p) { const s=document.createElement('span'); s.className='pc '+p.color; s.textContent=GLYPH[p.type]+'︎'; el.appendChild(s); }
+      if (i===7) { const c=document.createElement('span'); c.className='coord f'; c.textContent=FILES[file]; el.appendChild(c); }
+      if (j===0) { const c=document.createElement('span'); c.className='coord r'; c.textContent=rank; el.appendChild(c); }
+      el.dataset.sq = sq;
+      boardEl.appendChild(el);
+    }
+    drawArrow(hm);
+  }
+  function sqXY(sq){
+    const f = FILES.indexOf(sq[0]), r = +sq[1];
+    const x = orientation==='w' ? f : 7-f;
+    const y = orientation==='w' ? 8-r : r-1;
+    return [x+0.5, y+0.5];
+  }
+  function drawArrow(hm){
+    if (!hm) { arrowEl.innerHTML=''; return; }
+    const [x1,y1]=sqXY(hm.from), [x2,y2]=sqXY(hm.to);
+    const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy), ux=dx/len, uy=dy/len;
+    const hx=x2-ux*0.32, hy=y2-uy*0.32;           // o'q boshining asosi
+    const px=-uy*0.2, py=ux*0.2;
+    arrowEl.innerHTML =
+      '<line x1="'+x1+'" y1="'+y1+'" x2="'+hx+'" y2="'+hy+'" stroke="rgba(30,140,80,.85)" stroke-width="0.16" stroke-linecap="round"/>' +
+      '<polygon points="'+x2+','+y2+' '+(hx+px)+','+(hy+py)+' '+(hx-px)+','+(hy-py)+'" fill="rgba(30,140,80,.85)"/>';
+  }
+
+  boardEl.addEventListener('click', function(e){
+    const el = e.target.closest('.sq'); if (el) onSquare(el.dataset.sq);
+  });
+  function canMoveNow(){
+    if (game.game_over()) return false;
+    if (mode === 'play') return engineReady && game.turn() === playerColor;
+    return true; // maslahatchi rejimida ikkala tomonni sen kiritasan
+  }
+  function onSquare(sq){
+    if (!canMoveNow()) return;
+    const p = game.get(sq);
+    if (selected) {
+      const legal = game.moves({square:selected, verbose:true}).filter(m => m.to === sq);
+      if (legal.length) {
+        if (legal.some(m => m.promotion)) { askPromotion(selected, sq); return; }
+        doMove(selected, sq); return;
+      }
+    }
+    selected = (p && p.color === game.turn() && sq !== selected) ? sq : null;
+    render();
+  }
+  function doMove(from, to, promo){
+    cancelSearch();
+    const mv = game.move({from, to, promotion: promo || 'q'});
+    selected = null;
+    if (!mv) { render(); return; }
+    afterChange();
+  }
+  function askPromotion(from, to){
+    pendingPromo = {from, to};
+    const color = game.turn();
+    const box = $('promoBtns'); box.innerHTML = '';
+    ['q','r','b','n'].forEach(t => {
+      const b = document.createElement('button');
+      b.innerHTML = '<span class="pc ' + color + '" style="font-size:44px">' + GLYPH[t] + '︎</span>';
+      b.title = NAME[t];
+      b.onclick = () => { $('promoModal').classList.remove('show'); const pp=pendingPromo; pendingPromo=null; doMove(pp.from, pp.to, t); };
+      box.appendChild(b);
+    });
+    $('promoModal').classList.add('show');
+  }
+
+  function renderMoves(){
+    const h = game.history(), el = $('moves');
+    el.innerHTML = '';
+    if (!h.length) { el.innerHTML = '<div class="empty" style="grid-column:1/-1">Hali yurish yo\'q.</div>'; return; }
+    for (let i=0;i<h.length;i+=2){
+      const n=document.createElement('div'); n.className='n'; n.textContent=(i/2+1)+'.';
+      const a=document.createElement('div'); a.className='m'+(i===h.length-1?' lastm':''); a.textContent=h[i];
+      const b=document.createElement('div'); b.className='m'+(i+1===h.length-1?' lastm':''); b.textContent=h[i+1]||'';
+      el.append(n,a,b);
+    }
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function afterChange(){
+    render(); renderMoves(); updatePanel();
+    requestEngine();
+    updatePanel();
+  }
+
+  // ---------- Tugmalar ----------
+  function newGame(){
+    cancelSearch();
+    game.reset(); selected = null; hint = null; lastOppMove = null;
+    afterChange();
+  }
+  function setColor(c){
+    playerColor = c; orientation = c;
+    $('cWhite').classList.toggle('on', c==='w');
+    $('cBlack').classList.toggle('on', c==='b');
+    newGame();
+  }
+  function setMode(m){ mode = m; newGame(); }
+
+  $('mHelp').onclick = () => setMode('help');
+  $('mPlay').onclick = () => setMode('play');
+  $('cWhite').onclick = () => setColor('w');
+  $('cBlack').onclick = () => setColor('b');
+  $('newGame').onclick = newGame;
+  $('flip').onclick = () => { orientation = orientation==='w'?'b':'w'; render(); };
+  $('doHint').onclick = () => { const hm = hintMove(); if (hm) doMove(hm.from, hm.to, hm.promotion); };
+  $('think').onchange = () => { if (mode==='help' && hint) { hint = null; cancelSearch(); afterChange(); } };
+  $('undo').onclick = () => {
+    if (!game.history().length) return;
+    cancelSearch(); selected = null;
+    if (mode === 'help') {
+      game.undo();                         // bitta yurishni qaytaradi
+    } else {
+      if (playerColor === 'b' && game.history().length === 1 && game.turn() === 'b') return;
+      if (game.turn() !== playerColor) game.undo();      // Stockfish o'ylayotgan bo'lsa — mening yurishim
+      else { game.undo(); if (game.turn() !== playerColor) game.undo(); }
+      const h = game.history({verbose:true});
+      lastOppMove = [...h].reverse().find(m => m.color !== playerColor) || null;
+    }
+    afterChange();
+  };
+
+  afterChange();
+  initEngine();
+})();
+</script>
+</body>
+</html>
